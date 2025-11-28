@@ -1,0 +1,23 @@
+name: get_schema  
+enabled: true  
+required: false  
+code: get_schema  
+description: >-  
+  Get schema information of a parquet file to understand its structure.  
+  Retrieves metadata including column names, types, and row counts.  
+  Use this before querying to know what columns are available.  
+  
+examples: |-  
+  schema = get_schema(parquet_file="data.parquet")  
+  
+parameters:  
+  - name: parquet_file  
+    type: str  
+    required: true  
+    description: Path to parquet file to inspect  
+  
+returns:  
+  - name: schema_info  
+    type: str  
+    description: >-  
+      JSON string containing file path, row_count, and columns list with name and type.

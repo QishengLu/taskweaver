@@ -1,0 +1,34 @@
+name: query_parquet_files  
+enabled: true  
+required: false  
+code: query_parquet_files  
+description: >-  
+  Query parquet files using SQL syntax for data analysis and exploration.  
+  Each parquet file is registered as a table with its filename (without extension) as the table name.  
+  Always use reasonable LIMIT values to avoid overwhelming token budgets.  
+  
+examples: |-  
+  result = query_parquet_files(parquet_files="logs.parquet", query="SELECT * FROM logs WHERE level = 'ERROR' LIMIT 20")  
+  result = query_parquet_files(parquet_files=["logs.parquet", "traces.parquet"], query="SELECT service, COUNT(*) FROM traces GROUP BY service LIMIT 10")  
+  
+parameters:  
+  - name: parquet_files  
+    type: "Union[str, List[str]]"  
+    required: true  
+    description: >-  
+      Path(s) to parquet file(s). Each file becomes a queryable table named after the filename.  
+  - name: query  
+    type: str  
+    required: true  
+    description: SQL query to execute. Use filename stems as table names.  
+  - name: limit  
+    type: int  
+    required: false  
+    description: "Maximum number of records to return (default: 10, recommended: ≤100)"
+  
+returns:  
+  - name: result  
+    type: str  
+    description: >-  
+      JSON string of query results (list of dictionaries), or a warning message  
+      if the result exceeds the token budget with suggestions to adjust the query.

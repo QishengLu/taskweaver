@@ -1,0 +1,7 @@
+{
+  "llm.api_base": "https://api.openai.com/v1",
+  "llm.api_type": "openai",
+  "llm.api_key": "",
+  "llm.model": "gpt-4o-mini",
+  "virtual_user.max_rounds": 15
+}

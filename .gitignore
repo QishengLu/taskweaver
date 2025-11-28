@@ -250,3 +250,7 @@ FINAL_DIAGNOSIS.md
 DEBUG_FIXES_SUMMARY.md
 RCA_FIXES_SUMMARY.md
 EXECUTION_ANALYSIS_REPORT.md
+
+# Local scripts
+taskweaver_rca.py
+auto_rca_script.py

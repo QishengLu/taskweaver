@@ -1,0 +1,24 @@
+name: list_tables_in_directory  
+enabled: true  
+required: false  
+code: list_tables_in_directory  
+description: >-  
+  List all parquet files in a directory with basic metadata.  
+  Scans a directory for all .parquet files and retrieves row count and column count.  
+  Useful for discovering available data sources before querying.  
+  
+examples: |-  
+  files = list_tables_in_directory(directory="./data")  
+  
+parameters:  
+  - name: directory  
+    type: str  
+    required: true  
+    description: Directory path to search for parquet files  
+  
+returns:  
+  - name: files_info  
+    type: str  
+    description: >-  
+      JSON string containing list of files with filename, path, row_count, column_count,  
+      and error message if file cannot be read.

@@ -8,7 +8,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --no-warn-script-location -r requirements.txt
 
 # TODO: Install additional packages for plugins
-
+# add duckdb and other data analysis libs in the requirements.txt
+    
 # Copy the project code
 COPY taskweaver/ces /app/taskweaver/ces
 COPY taskweaver/plugin /app/taskweaver/plugin

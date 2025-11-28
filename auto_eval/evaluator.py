@@ -6,12 +6,20 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
-from langchain.load import dumps
-from langchain.schema.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_community.chat_models import ChatOpenAI
-from langchain_community.chat_models.azureml_endpoint import AzureMLChatOnlineEndpoint, CustomOpenAIChatContentFormatter
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import AzureChatOpenAI
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI, AzureChatOpenAI
+
+# For compatibility: dumps function to serialize messages
+def dumps(messages):
+    """Convert LangChain messages to JSON string for text representation"""
+    result = []
+    for msg in messages:
+        msg_dict = {
+            "type": msg.__class__.__name__,
+            "content": msg.content if hasattr(msg, "content") else str(msg)
+        }
+        result.append(msg_dict)
+    return json.dumps(result, indent=2)
 
 EVALUATOR_PROMPT_FILE_PATH = os.path.join(os.path.dirname(__file__), "evaluator_prompt.yaml")
 VIRTUAL_USER_PROMPT_FILE_PATH = os.path.join(os.path.dirname(__file__), "virtual_user_prompt.yaml")
@@ -50,6 +58,7 @@ def config_llm(config: Dict[str, str]) -> Union[ChatOpenAI, AzureChatOpenAI]:
             azure_deployment=get_config(config, "llm.model"),
             temperature=0,
             verbose=True,
+            timeout=120.0,
         )
     elif api_type == "openai":
         model = ChatOpenAI(
@@ -57,6 +66,7 @@ def config_llm(config: Dict[str, str]) -> Union[ChatOpenAI, AzureChatOpenAI]:
             model_name=get_config(config, "llm.model"),
             temperature=0,
             verbose=True,
+            timeout=120.0,
         )
     elif api_type == "google_ai":
         os.environ["GOOGLE_API_KEY"] = get_config(config, "llm.api_key")
@@ -189,13 +199,22 @@ class Evaluator(object):
         code = scoring_point.eval_code
         eval_code_snippet = "\n".join([f"{line}" for line in code.strip().split("\n")])
         func_code = (
-            f"from langchain.load import load\n"
             f"import json\n"
-            f"from langchain.schema.messages import AIMessage, HumanMessage, SystemMessage\n"
-            f"from langchain_community.chat_models import ChatOpenAI\n"
-            f"from langchain_openai import AzureChatOpenAI\n"
+            f"from langchain_core.messages import AIMessage, HumanMessage, SystemMessage\n"
+            f"from langchain_openai import ChatOpenAI, AzureChatOpenAI\n"
             f"with open('eval_chat_history.json', 'r') as f:\n"
-            f"  chat_history = load(json.load(f))\n"
+            f"  chat_history_data = json.load(f)\n"
+            f"  # Reconstruct messages from JSON\n"
+            f"  chat_history = []\n"
+            f"  for msg_dict in chat_history_data:\n"
+            f"    msg_type = msg_dict.get('type', '')\n"
+            f"    content = msg_dict.get('content', '')\n"
+            f"    if msg_type == 'HumanMessage':\n"
+            f"      chat_history.append(HumanMessage(content=content))\n"
+            f"    elif msg_type == 'AIMessage':\n"
+            f"      chat_history.append(AIMessage(content=content))\n"
+            f"    elif msg_type == 'SystemMessage':\n"
+            f"      chat_history.append(SystemMessage(content=content))\n"
             f"chat_history = chat_history[:-1]\n"  # exclude the last message with "stop_keyword"
             f"{eval_code_snippet}"
         )

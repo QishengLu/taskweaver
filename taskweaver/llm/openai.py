@@ -131,18 +131,21 @@ class OpenAIService(CompletionService, EmbeddingService):
             client = OpenAI(
                 base_url=self.config.api_base,
                 api_key=self.config.api_key,
+                timeout=120.0,  # Increase timeout for long requests (2 minutes)
             )
         elif self.api_type == "azure":
             client = AzureOpenAI(
                 api_version=self.config.api_version,
                 azure_endpoint=self.config.api_base,
                 api_key=self.config.api_key,
+                timeout=120.0,  # Increase timeout for long requests (2 minutes)
             )
         elif self.api_type == "azure_ad":
             client = AzureOpenAI(
                 api_version=self.config.api_version,
                 azure_endpoint=self.config.api_base,
                 azure_ad_token_provider=self._get_aad_token_provider(),
+                timeout=120.0,  # Increase timeout for long requests (2 minutes)
             )
         else:
             raise Exception(f"Invalid API type: {self.api_type}")

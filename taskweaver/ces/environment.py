@@ -111,7 +111,7 @@ class EnvMode(enum.Enum):
 
 
 class Environment:
-    DEFAULT_IMAGE = "taskweavercontainers/taskweaver-executor:latest"
+    DEFAULT_IMAGE = "taskweavercontainers/taskweaver-executor:0.3"
 
     def __init__(
         self,

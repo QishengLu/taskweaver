@@ -238,3 +238,15 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+question_3/
+
+modification.md
+
+output.json
+auto_eval/project/workspace/sessions/
+*.parquet
+DIAGNOSIS_REPORT.md
+FINAL_DIAGNOSIS.md
+DEBUG_FIXES_SUMMARY.md
+RCA_FIXES_SUMMARY.md
+EXECUTION_ANALYSIS_REPORT.md

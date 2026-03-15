@@ -254,3 +254,6 @@ EXECUTION_ANALYSIS_REPORT.md
 # Local scripts
 taskweaver_rca.py
 auto_rca_script.py
+
+# Databases
+*.db

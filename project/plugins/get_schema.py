@@ -1,6 +1,6 @@
 import json
-from datetime import datetime
 from pathlib import Path
+from typing import Union, List
 from taskweaver.plugin import Plugin, register_plugin
 
 TOKEN_LIMIT = 5000
@@ -17,12 +17,13 @@ def _import_duckdb():
         )
 
 
+def _sanitize_column_name(name: str) -> str:
+    """Replace dots in column names with underscores to avoid DuckDB dot-notation ambiguity."""
+    return name.replace(".", "_")
+
+
 def _estimate_token_count(text: str) -> int:
-    """Estimate token count using character-based approximation.
-    
-    Approximate for Chinese/English mixed text.
-    Average: 3 characters per token.
-    """
+    """Estimate token count using character-based approximation."""
     average_chars_per_token = 3
     return (len(text) + average_chars_per_token - 1) // average_chars_per_token
 
@@ -50,57 +51,48 @@ def _enforce_token_limit(payload: str, context: str) -> str:
     return json.dumps(warning, ensure_ascii=False, indent=2)
 
 
-@register_plugin
-class GetSchemaPlugin(Plugin):
-    def __call__(self, parquet_file: str) -> str:
-        """
-        Get schema information of a parquet file.
-        
-        :param parquet_file: Path to parquet file to inspect
-        :return schema_info: JSON string containing file metadata
-        """
-        duckdb = _import_duckdb()
-        
-        if not Path(parquet_file).exists():
-            raise FileNotFoundError(
-                f"Parquet file not found: {parquet_file}\n"
-                f"Please verify the file path. Use 'list_tables_in_directory' to discover available files."
-            )
+def _get_schema_one(parquet_file: str) -> dict:
+    """Get schema for a single parquet file, returning a dict."""
+    duckdb = _import_duckdb()
 
-        conn = duckdb.connect(":memory:")
-        try:
-            cwd = Path.cwd()
-            parquet_file_obj = Path(parquet_file)
-            if parquet_file_obj.is_absolute():
-                try:
-                    parquet_file = str(parquet_file_obj.relative_to(cwd))
-                except ValueError:
-                    parquet_file = str(parquet_file_obj)
+    if not Path(parquet_file).exists():
+        return {"error": f"Parquet file not found: {parquet_file}"}
 
-            result = conn.execute(f"SELECT * FROM read_parquet('{parquet_file}') LIMIT 0")
-            schema = [{"name": desc[0], "type": str(desc[1])} for desc in result.description]
+    conn = duckdb.connect(":memory:")
+    try:
+        result = conn.execute(f"SELECT * FROM read_parquet('{parquet_file}') LIMIT 0")
+        schema = [{"name": _sanitize_column_name(desc[0]), "type": str(desc[1])} for desc in result.description]
 
-            row_count_result = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_file}')").fetchone()
-            if row_count_result is None:
-                raise RuntimeError("Failed to read row count from parquet file")
+        row_count_result = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_file}')").fetchone()
+        if row_count_result is None:
+            row_count = 0
+        else:
             row_count = row_count_result[0]
 
-            schema_info = {
-                "file": parquet_file,
-                "row_count": row_count,
-                "columns": schema,
-            }
+        return {
+            "file": parquet_file,
+            "row_count": row_count,
+            "columns": schema,
+        }
 
-            result_json = json.dumps(schema_info, ensure_ascii=False, indent=2)
-            return _enforce_token_limit(result_json, "get_schema")
+    except Exception as e:
+        return {"error": f"Failed to extract schema: {str(e)}"}
+    finally:
+        conn.close()
 
-        except FileNotFoundError:
-            raise
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to extract schema from parquet file: {str(e)}\n"
-                f"File: {parquet_file}\n"
-                f"This may indicate a corrupted file or unsupported parquet format."
-            ) from e
-        finally:
-            conn.close()
+
+@register_plugin
+class GetSchemaPlugin(Plugin):
+    def __call__(self, parquet_files: Union[str, List[str]]) -> str:
+        """
+        Get schema information of a parquet file, or a list of parquet files.
+
+        :param parquet_files: Path to a parquet file, or list of paths for batch lookup
+        :return schema_info: JSON string containing file metadata — single object if one file, list if multiple
+        """
+        if isinstance(parquet_files, str):
+            result_json = json.dumps(_get_schema_one(parquet_files), ensure_ascii=False, indent=2)
+        else:
+            result_json = json.dumps([_get_schema_one(f) for f in parquet_files], ensure_ascii=False, indent=2)
+
+        return _enforce_token_limit(result_json, "get_schema")

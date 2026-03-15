@@ -4,6 +4,14 @@ from taskweaver.plugin import Plugin, register_plugin
 
 TOKEN_LIMIT = 5000
 
+ALLOWED_STEMS = {
+    "normal_logs", "abnormal_logs",
+    "normal_traces", "abnormal_traces",
+    "normal_metrics", "abnormal_metrics",
+    "normal_metrics_histogram", "abnormal_metrics_histogram",
+    "normal_metrics_sum", "abnormal_metrics_sum",
+}
+
 
 def _import_duckdb():
     """Import duckdb with helpful error message."""
@@ -50,29 +58,26 @@ class ListTablesInDirectoryPlugin(Plugin):
     def __call__(self, directory: str) -> str:
         """
         List all parquet files in a directory with metadata.
-        
+
         :param directory: Directory path to search for parquet files
         :return files_info: JSON string containing list of files with metadata
         """
         duckdb = _import_duckdb()
-        
+
         dir_path = Path(directory)
         if not dir_path.exists():
-            raise FileNotFoundError(
-                f"Directory not found: {directory}\n"
-                f"Please verify the directory path exists and is accessible."
-            )
+            return json.dumps({"error": f"Directory not found: {directory}"})
 
         if not dir_path.is_dir():
-            raise ValueError(
-                f"Path is not a directory: {directory}\n"
-                f"Please provide a valid directory path, not a file path."
-            )
+            return json.dumps({"error": f"Path is not a directory: {directory}"})
 
         files_info = []
         cwd = Path.cwd()
-        
-        for file_path in dir_path.glob("*.parquet"):
+
+        # Use rglob to find parquet files recursively (only allowed stems)
+        for file_path in sorted(dir_path.rglob("*.parquet")):
+            if file_path.stem not in ALLOWED_STEMS:
+                continue
             file_path_str = str(file_path)
             file_path_obj = Path(file_path_str)
             if file_path_obj.is_absolute():
@@ -80,15 +85,16 @@ class ListTablesInDirectoryPlugin(Plugin):
                     file_path_str = str(file_path_obj.relative_to(cwd))
                 except ValueError:
                     file_path_str = str(file_path_obj)
-            
+
             try:
                 conn = duckdb.connect(":memory:")
-                row_count_result = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{file_path_str}')").fetchone()
+                row_count_result = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{file_path}')").fetchone()
                 if row_count_result is None:
-                    raise RuntimeError("Failed to read row count from parquet file")
-                row_count = row_count_result[0]
-                
-                result = conn.execute(f"SELECT * FROM read_parquet('{file_path_str}') LIMIT 0")
+                    row_count = 0
+                else:
+                    row_count = row_count_result[0]
+
+                result = conn.execute(f"SELECT * FROM read_parquet('{file_path}') LIMIT 0")
                 column_count = len(result.description)
                 conn.close()
 
@@ -102,8 +108,8 @@ class ListTablesInDirectoryPlugin(Plugin):
                 )
             except Exception as e:
                 files_info.append({
-                    "filename": file_path.name, 
-                    "path": str(file_path), 
+                    "filename": file_path.name,
+                    "path": str(file_path),
                     "error": str(e)
                 })
 

@@ -1,8 +1,10 @@
 {
-  "llm.api_base": "https://api.openai.com/v1",
+  "llm.api_base": "https://api.shubiaobiao.cn/v1",
   "llm.api_type": "openai",
-  "llm.api_key": "",
-  "llm.model": "gpt-4o-mini",
+  "llm.api_key": "sk-TisdMcaR6FpD4yVrF63bA49cFe86429881370aB3E6629496",
+  "llm.model": "claude-sonnet-4-6",
+  "execution_service.kernel_mode": "local",
+  "session.max_internal_chat_round_num": 50,
   "planner.prompt_compression": true,
   "code_generator.prompt_compression": true,
   "round_compressor.rounds_to_compress": 2,

@@ -33,7 +33,7 @@ def _serialize_datetime(obj):
 
 def _estimate_token_count(text: str) -> int:
     """Estimate token count using character-based approximation.
-    
+
     Approximate for Chinese/English mixed text.
     Average: 3 characters per token.
     """
@@ -73,6 +73,37 @@ def _enforce_token_limit(payload: str, context: str) -> str:
     return json.dumps(warning, ensure_ascii=False, indent=2)
 
 
+def _sanitize_column_name(name: str) -> str:
+    """Replace dots in column names with underscores to avoid DuckDB dot-notation ambiguity."""
+    return name.replace(".", "_")
+
+
+def _build_rename_select(parquet_path: str) -> str:
+    """Build a SELECT clause that renames dot-containing columns for a parquet file.
+
+    Returns 'SELECT col1, "attr.x" AS attr_x, ...' or 'SELECT *' if no renames needed.
+    """
+    duckdb = _import_duckdb()
+    conn = duckdb.connect(":memory:")
+    try:
+        result = conn.execute(f"SELECT * FROM read_parquet('{parquet_path}') LIMIT 0")
+        columns = [desc[0] for desc in result.description]
+    finally:
+        conn.close()
+
+    needs_rename = any("." in col for col in columns)
+    if not needs_rename:
+        return "*"
+
+    parts = []
+    for col in columns:
+        if "." in col:
+            parts.append(f'"{col}" AS {_sanitize_column_name(col)}')
+        else:
+            parts.append(col)
+    return ", ".join(parts)
+
+
 def _validate_parquet_files(parquet_files: Union[str, List[str]]) -> List[str]:
     """Validate parquet files exist and return as list."""
     if isinstance(parquet_files, str):
@@ -93,14 +124,17 @@ class QueryParquetFilesPlugin(Plugin):
     def __call__(self, parquet_files: Union[str, List[str]], query: str, limit: int = 10) -> str:
         """
         Query parquet files using SQL syntax for data analysis and exploration.
-        
+
         :param parquet_files: Path(s) to parquet file(s)
         :param query: SQL query to execute
         :param limit: Maximum number of records to return
         :return result: JSON string of query results
         """
         duckdb = _import_duckdb()
-        parquet_files = _validate_parquet_files(parquet_files)
+        try:
+            parquet_files = _validate_parquet_files(parquet_files)
+        except FileNotFoundError as e:
+            return json.dumps({"error": str(e)})
 
         conn = duckdb.connect(":memory:")
         table_names: set = set()
@@ -115,12 +149,12 @@ class QueryParquetFilesPlugin(Plugin):
                     try:
                         file_path = str(file_path_obj.relative_to(cwd))
                     except ValueError:
-                        # File is not under cwd (e.g., temp files), use absolute path
                         file_path = str(file_path_obj)
                 relative_parquet_files.append(file_path)
             parquet_files = relative_parquet_files
 
             # Register parquet files as views using filename as table name
+            # with column rename for dot-containing column names
             for file_path in parquet_files:
                 base_name = Path(file_path).stem
                 table_name = base_name
@@ -129,14 +163,15 @@ class QueryParquetFilesPlugin(Plugin):
                     table_name = f"{base_name}_{counter}"
                     counter += 1
                 table_names.add(table_name)
-                conn.execute(f"CREATE VIEW {table_name} AS SELECT * FROM read_parquet('{file_path}')")
+                select_clause = _build_rename_select(file_path)
+                conn.execute(f"CREATE VIEW {table_name} AS SELECT {select_clause} FROM read_parquet('{file_path}')")
 
             # Execute query
             result = conn.execute(query).fetchall()
             columns = [desc[0] for desc in conn.description]
 
             # Convert to list of dictionaries and serialize datetime
-            rows = [dict(zip(columns, row, strict=False)) for row in result]
+            rows = [dict(zip(columns, row)) for row in result]
             serialized_rows = _serialize_datetime(rows)
 
             # Apply limit if specified
@@ -146,31 +181,26 @@ class QueryParquetFilesPlugin(Plugin):
             result_json = json.dumps(serialized_rows, ensure_ascii=False, indent=2)
             return _enforce_token_limit(result_json, "query_parquet_files")
 
-        except FileNotFoundError:
-            # Re-raise FileNotFoundError as-is (already has good message)
-            raise
         except Exception as e:
             error_msg = str(e)
-            # Provide contextual error messages
+            # Provide contextual error messages (return JSON, don't raise)
             if "syntax error" in error_msg.lower() or "parser error" in error_msg.lower():
-                raise RuntimeError(
-                    f"SQL syntax error in query: {error_msg}\n"
-                    f"Query: {query}\n"
-                    f"Available tables: {', '.join(table_names) if table_names else 'None'}\n"
-                    f"Tip: Use 'get_schema' to check column names before querying."
-                ) from e
+                return json.dumps({
+                    "error": f"SQL syntax error in query: {error_msg}",
+                    "query": query,
+                    "available_tables": list(table_names)
+                })
             elif "catalog" in error_msg.lower() or "table" in error_msg.lower():
-                raise RuntimeError(
-                    f"Table reference error: {error_msg}\n"
-                    f"Query: {query}\n"
-                    f"Available tables: {', '.join(table_names) if table_names else 'None'}\n"
-                    f"Make sure table names in your query match the registered table names."
-                ) from e
+                return json.dumps({
+                    "error": f"Table reference error: {error_msg}",
+                    "query": query,
+                    "available_tables": list(table_names)
+                })
             else:
-                raise RuntimeError(
-                    f"Query execution failed: {error_msg}\n"
-                    f"Query: {query}\n"
-                    f"Available tables: {', '.join(table_names) if table_names else 'None'}"
-                ) from e
+                return json.dumps({
+                    "error": f"Query execution failed: {error_msg}",
+                    "query": query,
+                    "available_tables": list(table_names)
+                })
         finally:
             conn.close()

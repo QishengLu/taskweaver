@@ -130,6 +130,7 @@ celerybeat.pid
 
 # Environments
 .env
+project/taskweaver_config.json
 .venv
 env/
 venv/

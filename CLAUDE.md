@@ -109,10 +109,10 @@ stdout JSON { output, trajectory }
 
 ```json
 {
-  "llm.api_base": "https://api.shubiaobiao.cn/v1",
+  "llm.api_base": "https://coding.dashscope.aliyuncs.com/v1",
   "llm.api_type": "openai",
-  "llm.api_key": "<从环境变量读取>",
-  "llm.model": "openai/claude-sonnet-4-5-20250929",
+  "llm.api_key": "",
+  "llm.model": "qwen3.5-plus",
   "execution_service.kernel_mode": "local",
   "session.max_internal_chat_round_num": 50,
   "planner.prompt_compression": true,
@@ -122,15 +122,18 @@ stdout JSON { output, trajectory }
 }
 ```
 
-**注意**：`planner.prompt_file_path` 由 `agent_runner.py` 运行时通过 `config_override` 指向动态生成的临时 YAML。
+**注意**：
+- `planner.prompt_file_path` 由 `agent_runner.py` 运行时通过 `config_override` 指向动态生成的临时 YAML。
+- `config_override` 同时覆盖 `llm.model`、`llm.api_key`、`llm.api_base`，从 `RCA_MODEL` 和 `.env` 环境变量动态读取，config.json 中的值仅作为 fallback。
 
 ### 环境变量
 
 在项目根目录创建 `.env`：
 
 ```
-OPENAI_API_KEY=sk-...          # kimi API key
-OPENAI_BASE_URL=https://api.shubiaobiao.cn/v1
+# Qwen3.5-plus via Aliyun Coding Plan
+OPENAI_API_KEY=                                          # 运行前命令行传入
+OPENAI_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 ```
 
 ---
@@ -183,13 +186,13 @@ RolloutRunner 构建 payload
 `RolloutRunner/configs/agents/taskweaver.yaml`：
 ```yaml
 name: taskweaver
-cmd: ["python", "agent_runner.py"]
+cmd: ["/home/nn/miniconda3/envs/taskweaver/bin/python", "agent_runner.py"]
 cwd: /home/nn/SOTA-agents/TaskWeaver
-exp_id: rollout_taskweaver
-model_name: openai/claude-sonnet-4-5-20250929
+exp_id: taskweaver-qwen3.5-plus
+model_name: qwen3.5-plus
 agent_type: taskweaver
-concurrency: 2
-timeout: 600
+concurrency: 5
+timeout: 1800
 data_dir: /home/nn/SOTA-agents/RolloutRunner/data
 ```
 
@@ -235,10 +238,11 @@ nohup python -u scripts/run_rollout.py --agent taskweaver --source_exp_id rcaben
 
 | 约束 | 值 |
 |------|---|
-| 最大内部对话轮数 | 50（`session.max_internal_chat_round_num`，config_override 覆盖 config.json） |
+| 最大内部对话轮数 | 150（`session.max_internal_chat_round_num`，config_override 覆盖 config.json） |
 | DuckDB 结果 token 限制 | 5000 tokens |
 | Prompt 压缩 | 开启（保留最近 3 轮，压缩前 2 轮），但单 Round 不触发 |
 | 执行模式 | local kernel（非 container） |
+| 模型（RCA 评测） | qwen3.5-plus（百炼 Coding Plan） |
 
 ---
 

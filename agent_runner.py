@@ -448,10 +448,16 @@ def main():
     # 初始化 TaskWeaver
     app_dir = os.path.join(os.path.dirname(__file__), "project")
 
+    # 动态读取模型配置：RCA_MODEL 由 RolloutRunner 传入，API key/base_url 从 .env 读取
+    rca_model = os.environ.get("RCA_MODEL", "claude-sonnet-4-6")
+
     config_override = {
         "execution_service.kernel_mode": "local",
         "session.max_internal_chat_round_num": 150,
         "planner.prompt_file_path": prompt_yaml_path,
+        "llm.model": rca_model,
+        "llm.api_key": os.environ.get("OPENAI_API_KEY", ""),
+        "llm.api_base": os.environ.get("OPENAI_BASE_URL", "https://api.shubiaobiao.cn/v1"),
     }
 
     app = TaskWeaverApp(app_dir=app_dir, config=config_override)

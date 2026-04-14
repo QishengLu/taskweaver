@@ -114,7 +114,7 @@ stdout JSON { output, trajectory }
   "llm.api_key": "",
   "llm.model": "qwen3.5-plus",
   "execution_service.kernel_mode": "local",
-  "session.max_internal_chat_round_num": 50,
+  "session.max_internal_chat_round_num": 50,  // 仅作为 fallback；agent_runner.py 用 config_override 设 200
   "planner.prompt_compression": true,
   "code_generator.prompt_compression": true,
   "round_compressor.rounds_to_compress": 2,
@@ -238,7 +238,8 @@ nohup python -u scripts/run_rollout.py --agent taskweaver --source_exp_id rcaben
 
 | 约束 | 值 |
 |------|---|
-| 最大内部对话轮数 | 150（`session.max_internal_chat_round_num`，config_override 覆盖 config.json） |
+| 最大内部对话轮数 | **200**（`session.max_internal_chat_round_num`，config_override 覆盖 config.json。按 ~2 rounds/工具调用 计算，可支持 ~80 次真实工具调用 + 25% buffer。2026-04-14 从 150 调至 200） |
+| `--log-file` 参数 | ✅ 支持（同 thinkdepthai/aiq/mabc），可通过 `--log-file path.log` 或 `TW_LOG_FILE` 环境变量把 Planner/CodeInterpreter 详细对话 + LLM prompt 写到独立日志文件，便于 `run_rollout_with_retry.py --log_dir` 批量跑时实时 tail 查看每个样本的 Planner 推理过程 |
 | DuckDB 结果 token 限制 | 5000 tokens |
 | Prompt 压缩 | 开启（保留最近 3 轮，压缩前 2 轮），但单 Round 不触发 |
 | 执行模式 | local kernel（非 container） |
